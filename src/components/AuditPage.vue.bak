@@ -1,0 +1,610 @@
+<template>
+    <div class="flex flex-col h-full">
+        <!-- Header -->
+        <div class="page-header">
+            <img src="/logo.svg" alt="" class="w-8 h-8 rounded-lg" />
+            <div>
+                <h1 class="text-base font-bold text-[#E9ECEF]">Audit</h1>
+                <p class="text-xs text-[#888]">
+                    ตรวจสอบความถูกต้องของข้อมูล HOSxP
+                </p>
+            </div>
+            <div class="ml-auto flex items-center gap-2">
+                <div
+                    v-if="running"
+                    class="flex items-center gap-2 text-xs text-[#FFB700]"
+                >
+                    <Loader2 :size="14" class="animate-spin" />
+                    {{ doneCount }}/{{ totalCount }}
+                </div>
+                <span
+                    v-if="!dbConnected"
+                    class="text-xs text-[#FF4D00] flex items-center gap-1"
+                >
+                    <AlertCircle :size="14" /> ไม่ได้เชื่อมต่อ
+                </span>
+            </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div
+            class="px-4 py-3 border-b border-[#3A3A3B] flex flex-wrap items-center gap-2"
+        >
+            <!-- Date range (native input) -->
+            <div class="flex items-center gap-2 text-sm">
+                <CalendarDays :size="15" class="text-[#888]" />
+                <input
+                    type="date"
+                    v-model="dateFrom"
+                    class="input-field text-xs w-36 cursor-pointer"
+                />
+                <span class="text-[#555]">—</span>
+                <input
+                    type="date"
+                    v-model="dateTo"
+                    class="input-field text-xs w-36 cursor-pointer"
+                />
+            </div>
+
+            <div class="h-5 w-px bg-[#3A3A3B]"></div>
+
+            <!-- Run buttons -->
+            <button
+                class="btn-primary text-sm"
+                :disabled="running || !dbConnected"
+                @click="runAll"
+            >
+                <Play :size="14" /> Run All
+            </button>
+            <button
+                class="btn-secondary text-sm"
+                :disabled="running || !dbConnected"
+                @click="runSelected"
+            >
+                <PlayCircle :size="14" /> Run Selected
+            </button>
+            <button
+                class="btn-warning text-sm"
+                :disabled="running || !dbConnected"
+                @click="runStarred"
+            >
+                <Star :size="14" /> Run Starred
+            </button>
+            <button v-if="running" class="btn-danger text-sm" @click="stop">
+                <Square :size="14" /> Stop
+            </button>
+            <button
+                class="btn-ghost text-sm"
+                :disabled="running"
+                @click="resetAll"
+            >
+                <RotateCcw :size="14" /> Reset
+            </button>
+        </div>
+
+        <!-- Filter bar -->
+        <div
+            class="px-4 py-2 border-b border-[#3A3A3B] flex items-center gap-2 bg-[#1A1A1B]/30"
+        >
+            <Search :size="14" class="text-[#555]" />
+            <input
+                v-model="searchText"
+                class="input-field flex-1 text-xs"
+                placeholder="ค้นหา Query..."
+            />
+            <select v-model="groupFilter" class="input-field w-36 text-xs">
+                <option :value="0">All Groups</option>
+                <option v-for="g in groups" :key="g.id" :value="g.id">
+                    {{ g.name }}
+                </option>
+            </select>
+            <select v-model="statusFilter" class="input-field w-32 text-xs">
+                <option value="all">All Status</option>
+                <option value="pass">Pass</option>
+                <option value="notpass">Not Pass</option>
+                <option value="error">Error</option>
+                <option value="idle">Idle</option>
+            </select>
+        </div>
+
+        <!-- Progress bar -->
+        <div v-if="running" class="h-1 bg-[#1A1A1B]">
+            <div
+                class="h-1 bg-[#FF4D00] transition-all duration-300"
+                :style="{ width: `${progress}%` }"
+            ></div>
+        </div>
+
+        <!-- Column header row (aligned widths with row cells) -->
+        <div
+            class="sticky top-0 z-10 bg-[#252526] border-b border-[#3A3A3B] px-4 py-2 flex items-center gap-3 text-[10px] font-bold uppercase tracking-wider text-[#666]"
+        >
+            <!-- Select All checkbox (matches row checkbox sizing) -->
+            <div class="w-4 flex items-center justify-center">
+                <input
+                    type="checkbox"
+                    :checked="allSelected"
+                    @change="toggleSelectAll"
+                    class="w-4 h-4 accent-[#FF4D00] cursor-pointer rounded"
+                    title="Select All / Deselect All"
+                />
+            </div>
+            <!-- Star placeholder (align with star button) -->
+            <div class="w-4 flex items-center justify-center"></div>
+            <!-- Name (flexible) -->
+            <div class="flex-1">Query / ชื่อ</div>
+            <!-- Status (align with badge width in rows) -->
+            <div class="w-24 text-center">Status</div>
+            <!-- Row count (align with rows) -->
+            <div class="w-16 text-right">Rows</div>
+            <!-- Elapsed time (align with rows) -->
+            <div class="w-16 text-right">Time</div>
+            <!-- Export All button (aligned to actions column width) -->
+            <div class="min-w-[140px] flex justify-end">
+                <button
+                    class="btn-success text-xs px-2 py-1"
+                    :disabled="notPassRows.length === 0"
+                    @click="exportAllXlsx"
+                    title="ส่งออก Excel ทั้งหมดที่มีปัญหา (Not Pass)"
+                >
+                    <FileDown :size="13" /> Export All
+                </button>
+            </div>
+        </div>
+
+        <!-- Query rows -->
+        <div class="flex-1 overflow-y-auto">
+            <div
+                v-if="filteredRows.length === 0"
+                class="flex flex-col items-center justify-center h-64 text-[#555] gap-3"
+            >
+                <Database :size="48" />
+                <p>ไม่พบ Query</p>
+            </div>
+
+            <div
+                v-for="(row, idx) in filteredRows"
+                :key="row.id"
+                :class="[
+                    'border-b border-[#3A3A3B]/50 px-4 py-3 flex items-center gap-3 transition-colors',
+                    idx % 2 === 1 ? 'bg-white/[0.02]' : '',
+                    row.status === 'running' ? 'bg-[#FFB700]/5' : '',
+                ]"
+            >
+                <!-- Checkbox -->
+                <input
+                    type="checkbox"
+                    v-model="row.selected"
+                    class="w-4 h-4 accent-[#FF4D00] cursor-pointer rounded"
+                />
+
+                <!-- Star -->
+                <button
+                    @click="toggleStar(row)"
+                    :class="[
+                        'p-0.5 transition-colors',
+                        row.is_starred
+                            ? 'text-[#FFB700]'
+                            : 'text-[#555] hover:text-[#FFB700]',
+                    ]"
+                >
+                    <Star
+                        :size="15"
+                        :fill="row.is_starred ? '#FFB700' : 'none'"
+                    />
+                </button>
+
+                <!-- Query info -->
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2">
+                        <span
+                            class="font-medium text-sm text-[#E9ECEF] truncate"
+                            >{{ row.name }}</span
+                        >
+                        <div class="flex gap-1 flex-wrap">
+                            <span
+                                v-for="gn in row.group_names"
+                                :key="gn"
+                                class="badge-neutral text-[10px]"
+                                >{{ gn }}</span
+                            >
+                        </div>
+                    </div>
+                    <p
+                        v-if="row.description"
+                        class="text-xs text-[#888] truncate mt-0.5"
+                    >
+                        {{ row.description }}
+                    </p>
+                </div>
+
+                <!-- Status + metrics + actions -->
+                <div class="flex items-center gap-3 flex-shrink-0">
+                    <!-- Status badge -->
+                    <div class="w-24 flex justify-center">
+                        <span
+                            v-if="!row.status || row.status === 'idle'"
+                            class="badge-neutral"
+                            >Idle</span
+                        >
+                        <span
+                            v-else-if="row.status === 'running'"
+                            class="badge-warning flex items-center gap-1"
+                        >
+                            <Loader2 :size="10" class="animate-spin" /> Running
+                        </span>
+                        <span
+                            v-else-if="
+                                row.status === 'pass' &&
+                                (row.row_count ?? 0) === 0
+                            "
+                            class="badge-success"
+                            >✓ Pass</span
+                        >
+                        <span
+                            v-else-if="
+                                row.status === 'pass' &&
+                                (row.row_count ?? 0) > 0
+                            "
+                            class="badge-notpass"
+                            >✗ Not Pass</span
+                        >
+                        <span
+                            v-else-if="row.status === 'error'"
+                            class="badge-error"
+                            :title="row.error_msg"
+                            >✗ Error</span
+                        >
+                        <span
+                            v-else-if="row.status === 'stopped'"
+                            class="badge-neutral"
+                            >Stopped</span
+                        >
+                    </div>
+
+                    <!-- Row count -->
+                    <div
+                        class="w-16 text-right text-xs tabular-nums text-[#aaa]"
+                    >
+                        <span v-if="row.status === 'pass'">
+                            {{ row.row_count?.toLocaleString() }} rows
+                        </span>
+                    </div>
+
+                    <!-- Elapsed time -->
+                    <div
+                        class="w-16 text-right text-xs tabular-nums text-[#888]"
+                    >
+                        <span v-if="row.elapsed_sec !== undefined">
+                            {{ row.elapsed_sec.toFixed(2) }}s
+                        </span>
+                    </div>
+
+                    <!-- Action buttons (show only when row_count > 0) -->
+                    <div class="flex items-center gap-1">
+                        <button
+                            v-if="
+                                row.status === 'pass' &&
+                                row.result_columns &&
+                                (row.row_count ?? 0) > 0
+                            "
+                            class="btn-ghost text-xs px-2 py-1"
+                            @click="viewResult(row)"
+                        >
+                            <Eye :size="13" /> View
+                        </button>
+                        <button
+                            v-if="
+                                row.status === 'pass' &&
+                                row.result_columns &&
+                                (row.row_count ?? 0) > 0
+                            "
+                            class="btn-success text-xs px-2 py-1"
+                            @click="exportXlsx(row)"
+                        >
+                            <FileDown :size="13" /> Excel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary bar -->
+        <div
+            class="px-6 py-2 border-t border-[#3A3A3B] flex justify-between items-center text-xs text-[#555]"
+        >
+            <span>พัฒนาโดย: กลุ่มงานแพทย์แผนไทย โรงพยาบาลสระโบสถ์ ลพบุรี</span>
+            <span>
+                {{ passCount }} pass · {{ notPassCount }} not pass ·
+                {{ errorCount }} error · {{ auditRows.length }} queries
+            </span>
+        </div>
+
+        <!-- Result Modal -->
+        <ResultModal
+            v-if="modalQuery"
+            :query="modalQuery"
+            @close="modalQuery = null"
+        />
+    </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from "vue";
+import {
+    Search,
+    CalendarDays,
+    Play,
+    PlayCircle,
+    Star,
+    Square,
+    RotateCcw,
+    Database,
+    Loader2,
+    AlertCircle,
+    Eye,
+    FileDown,
+} from "lucide-vue-next";
+import { utils, writeFile } from "xlsx";
+import ResultModal from "./ResultModal.vue";
+import { api } from "../tauri-api";
+import type { SqlQuery, SqlGroup, DbConfig, AuditQueryRow } from "../types";
+
+interface AuditRow extends AuditQueryRow {
+    selected: boolean;
+    is_starred: number;
+    group_names: string[];
+    description: string;
+}
+
+defineProps<{
+    dbConfig: DbConfig | null;
+    dbConnected: boolean;
+}>();
+
+// Date defaults: set to the current calendar month (from the 1st to the last day)
+const now = new Date();
+const start = new Date(now.getFullYear(), now.getMonth(), 1);
+const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+const pad = (n: number) => String(n).padStart(2, "0");
+const dateFrom = ref(
+    `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`,
+);
+const dateTo = ref(
+    `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(end.getDate())}`,
+);
+
+const auditRows = ref<AuditRow[]>([]);
+const groups = ref<SqlGroup[]>([]);
+const searchText = ref("");
+const groupFilter = ref<number>(0);
+const statusFilter = ref("all");
+const running = ref(false);
+const stopRequested = ref(false);
+const doneCount = ref(0);
+const totalCount = ref(0);
+const modalQuery = ref<AuditQueryRow | null>(null);
+
+/** Returns the logical display status for filter/badge purposes */
+function getDisplayStatus(row: AuditRow): string {
+    if (!row.status || row.status === "idle") return "idle";
+    if (row.status === "pass") {
+        return (row.row_count ?? 0) > 0 ? "notpass" : "pass";
+    }
+    return row.status;
+}
+
+const filteredRows = computed(() => {
+    return auditRows.value.filter((row) => {
+        const matchText =
+            !searchText.value ||
+            row.name.toLowerCase().includes(searchText.value.toLowerCase()) ||
+            row.description
+                ?.toLowerCase()
+                .includes(searchText.value.toLowerCase());
+        const matchGroup =
+            groupFilter.value === 0 ||
+            (row.group_ids && row.group_ids.includes(groupFilter.value));
+        const matchStatus =
+            statusFilter.value === "all" ||
+            getDisplayStatus(row) === statusFilter.value;
+        return matchText && matchGroup && matchStatus;
+    });
+});
+
+const allSelected = computed(
+    () =>
+        filteredRows.value.length > 0 &&
+        filteredRows.value.every((r) => r.selected),
+);
+
+const passCount = computed(
+    () =>
+        auditRows.value.filter(
+            (r) => r.status === "pass" && (r.row_count ?? 0) === 0,
+        ).length,
+);
+const notPassCount = computed(
+    () =>
+        auditRows.value.filter(
+            (r) => r.status === "pass" && (r.row_count ?? 0) > 0,
+        ).length,
+);
+const errorCount = computed(
+    () => auditRows.value.filter((r) => r.status === "error").length,
+);
+const progress = computed(() =>
+    totalCount.value > 0
+        ? Math.round((doneCount.value / totalCount.value) * 100)
+        : 0,
+);
+
+/** All rows that have issues (Not Pass) and have result data */
+const notPassRows = computed(() =>
+    auditRows.value.filter(
+        (r) =>
+            r.status === "pass" && (r.row_count ?? 0) > 0 && r.result_columns,
+    ),
+);
+
+async function loadData() {
+    const [queries, grps] = await Promise.all([
+        api.getEnabledQueries("audit"),
+        api.getAllGroups(),
+    ]);
+    groups.value = grps;
+    auditRows.value = queries.map((q: SqlQuery) => ({
+        ...q,
+        status: "idle" as const,
+        selected: false,
+        row_count: undefined,
+        elapsed_sec: undefined,
+        error_msg: "",
+        result_columns: undefined,
+        result_rows: undefined,
+    }));
+}
+
+function toggleSelectAll() {
+    const all = allSelected.value;
+    filteredRows.value.forEach((r) => (r.selected = !all));
+}
+
+async function toggleStar(row: AuditRow) {
+    const newStarred = !row.is_starred;
+    await api.setQueryStarred(row.id, newStarred);
+    row.is_starred = newStarred ? 1 : 0;
+}
+
+async function runAll() {
+    await runRows(auditRows.value);
+}
+
+async function runSelected() {
+    await runRows(auditRows.value.filter((r) => r.selected));
+}
+
+async function runStarred() {
+    await runRows(auditRows.value.filter((r) => r.is_starred));
+}
+
+async function runRows(rows: AuditRow[]) {
+    if (rows.length === 0) return;
+    running.value = true;
+    stopRequested.value = false;
+    doneCount.value = 0;
+    totalCount.value = rows.length;
+
+    rows.forEach((r) => {
+        r.status = "idle";
+        r.row_count = undefined;
+        r.elapsed_sec = undefined;
+        r.error_msg = "";
+        r.result_columns = undefined;
+        r.result_rows = undefined;
+    });
+
+    for (const row of rows) {
+        if (stopRequested.value) {
+            row.status = "stopped";
+            continue;
+        }
+        row.status = "running";
+        const t0 = performance.now();
+        try {
+            const result = await api.executeQuery(
+                row.sql_text,
+                dateFrom.value,
+                dateTo.value,
+            );
+            row.status = "pass";
+            row.row_count = result.row_count;
+            row.elapsed_sec = result.elapsed_sec;
+            row.result_columns = result.columns;
+            row.result_rows = result.rows;
+            api.logExecution({
+                queryId: row.id,
+                queryName: row.name,
+                mode: "audit",
+                dateFrom: dateFrom.value,
+                dateTo: dateTo.value,
+                rowCount: result.row_count,
+                elapsedSec: result.elapsed_sec,
+                status: "ok",
+                errorMsg: "",
+            }).catch(() => {});
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : String(e);
+            row.status = "error";
+            row.elapsed_sec = (performance.now() - t0) / 1000;
+            row.error_msg = msg;
+            api.logExecution({
+                queryId: row.id,
+                queryName: row.name,
+                mode: "audit",
+                dateFrom: dateFrom.value,
+                dateTo: dateTo.value,
+                rowCount: 0,
+                elapsedSec: row.elapsed_sec,
+                status: "error",
+                errorMsg: msg,
+            }).catch(() => {});
+        }
+        doneCount.value++;
+    }
+
+    running.value = false;
+}
+
+function stop() {
+    stopRequested.value = true;
+}
+
+function resetAll() {
+    auditRows.value.forEach((r) => {
+        r.status = "idle";
+        r.row_count = undefined;
+        r.elapsed_sec = undefined;
+        r.error_msg = "";
+        r.result_columns = undefined;
+        r.result_rows = undefined;
+    });
+    doneCount.value = 0;
+    totalCount.value = 0;
+}
+
+function viewResult(row: AuditRow) {
+    modalQuery.value = row;
+}
+
+/** Export a single row's result to Excel */
+function exportXlsx(row: AuditRow) {
+    if (!row.result_columns || !row.result_rows) return;
+    const wb = utils.book_new();
+    const wsData = [row.result_columns, ...row.result_rows];
+    const ws = utils.aoa_to_sheet(wsData);
+    const sheetName = row.name.substring(0, 31);
+    utils.book_append_sheet(wb, ws, sheetName);
+    writeFile(wb, `${row.name.replace(/\s+/g, "_")}.xlsx`);
+}
+
+/** Export ALL not-pass rows to a single Excel file (one sheet per query) */
+function exportAllXlsx() {
+    const rows = notPassRows.value;
+    if (rows.length === 0) return;
+    const wb = utils.book_new();
+    for (const row of rows) {
+        const wsData = [row.result_columns!, ...row.result_rows!];
+        const ws = utils.aoa_to_sheet(wsData);
+        // Excel sheet names: max 31 chars, no special chars
+        const sheetName = row.name
+            .replace(/[\/\\?*\[\]:]/g, "_")
+            .substring(0, 31);
+        utils.book_append_sheet(wb, ws, sheetName);
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    writeFile(wb, `audit_notpass_${today}.xlsx`);
+}
+
+onMounted(loadData);
+</script>

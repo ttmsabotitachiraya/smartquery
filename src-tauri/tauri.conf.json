@@ -1,0 +1,82 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "SmartQuery",
+  "version": "3.0.0",
+  "identifier": "com.achiraya.smartquery",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "SmartQuery for HOSxP",
+        "width": 1360,
+        "height": 840,
+        "minWidth": 1150,
+        "minHeight": 720,
+        "resizable": true,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Medical",
+    "shortDescription": "Smart SQL Query tool for HOSxP",
+    "longDescription": "SmartQuery is a powerful SQL query and data management tool designed specifically for the HOSxP hospital information system. Query, filter, and export hospital data with ease.",
+    "copyright": "Copyright © 2025 Achiraya. All rights reserved.",
+    "publisher": "Achiraya",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.13",
+      "frameworks": [],
+      "hardenedRuntime": true,
+      "signingIdentity": null,
+      "providerShortName": null,
+      "entitlements": null,
+      "exceptionDomain": null,
+      "dmg": {
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        },
+        "windowPosition": {
+          "x": 400,
+          "y": 100
+        },
+        "appPosition": {
+          "x": 160,
+          "y": 190
+        },
+        "applicationFolderPosition": {
+          "x": 500,
+          "y": 190
+        }
+      }
+    },
+    "windows": {
+      "digestAlgorithm": "sha256",
+      "certificateThumbprint": null,
+      "timestampUrl": null,
+      "tsp": false,
+      "allowDowngrades": true,
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      }
+    }
+  }
+}

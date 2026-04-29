@@ -1,0 +1,231 @@
+@import "tailwindcss";
+
+@layer base {
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+    }
+
+    html,
+    body,
+    #app {
+        height: 100%;
+        width: 100%;
+        overflow: hidden;
+        background-color: #1a1a1b;
+        color: #f8edeb;
+        font-family: "Tahoma", "Sarabun", sans-serif;
+        font-size: 15px;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+        background: #1a1a1b;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #3d3d3d;
+        border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: #5a5a5a;
+    }
+
+    /* Custom focus ring */
+    :focus-visible {
+        outline: 2px solid #e63946;
+        outline-offset: 2px;
+    }
+
+    /* Native select: force left-align text and remove system arrow */
+    select {
+        text-align: left;
+        text-align-last: left;
+        -moz-text-align-last: left;
+        direction: ltr;
+    }
+
+    select option {
+        text-align: left;
+        direction: ltr;
+        background-color: #2b2b2b;
+        color: #f8edeb;
+    }
+}
+
+@layer components {
+    /* ── Buttons ─────────────────────────────────────────────────── */
+    .btn-primary {
+        @apply bg-[#E63946] hover:bg-[#C3363F] text-[#F8EDEB] font-semibold px-4 py-2 rounded-lg
+               transition-all duration-150 flex items-center gap-2
+               disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none
+               hover:scale-[1.02] active:scale-[0.97];
+    }
+    .btn-secondary {
+        @apply bg-[#2D2D2E] hover:bg-[#3a3a3b] text-[#F8EDEB] font-medium px-4 py-2 rounded-lg
+               border border-[#3A3A3B] transition-all duration-150 flex items-center gap-2
+               disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none
+               hover:scale-[1.02] active:scale-[0.97];
+    }
+    .btn-success {
+        @apply bg-[#80B918] hover:bg-[#6DA616] text-white font-medium px-4 py-2 rounded-lg
+               transition-all duration-150 flex items-center gap-2
+               disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none
+               hover:scale-[1.02] active:scale-[0.97];
+    }
+    .btn-white {
+        @apply bg-white hover:bg-gray-100 text-[#1A1A1B] font-medium px-4 py-2 rounded-lg
+               transition-all duration-150 flex items-center gap-2
+               disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none
+               border border-gray-200 hover:scale-[1.02] active:scale-[0.97];
+    }
+    .btn-export {
+        @apply bg-[#2D2D2E] hover:bg-[#3a3a3b] text-[#F8EDEB] font-medium px-4 py-2 rounded-lg
+               border border-[#3A3A3B] transition-all duration-150 flex items-center gap-2
+               disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none
+               hover:scale-[1.02] active:scale-[0.97];
+    }
+    .btn-warning {
+        @apply bg-[#FFB703] hover:bg-[#E0A700] text-[#1A1A1B] font-medium px-4 py-2 rounded-lg
+               transition-all duration-150 flex items-center gap-2
+               disabled:opacity-40 disabled:cursor-not-allowed disabled:transform-none
+               hover:scale-[1.02] active:scale-[0.97];
+    }
+    .btn-danger {
+        @apply bg-transparent hover:bg-red-900/30 text-red-400 hover:text-red-300
+               font-medium px-3 py-1.5 rounded-lg transition-all duration-150 flex items-center gap-1.5
+               hover:scale-[1.02] active:scale-[0.97];
+    }
+    .btn-ghost {
+        @apply bg-transparent hover:bg-white/10 text-[#F8EDEB] font-medium px-3 py-1.5 rounded-lg
+               transition-all duration-150 flex items-center gap-1.5
+               hover:scale-[1.02] active:scale-[0.97];
+    }
+
+    /* ── Inputs & Selects ────────────────────────────────────────── */
+    .input-field {
+        @apply bg-[#2B2B2B] border border-[#3D3D3D] text-[#F8EDEB] rounded-[10px]
+               px-3 py-2 text-sm focus:border-[#E63946] focus:outline-none
+               transition-colors duration-150 w-full placeholder:text-[#555];
+        text-align: left;
+        text-align-last: left;
+    }
+
+    /* Select with custom chevron — wrap <select> in a div.select-wrap */
+    .select-wrap {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+    }
+    .select-wrap select {
+        @apply bg-[#2B2B2B] border border-[#3D3D3D] text-[#F8EDEB] rounded-[10px]
+               pl-3 pr-8 py-2 text-sm focus:border-[#E63946] focus:outline-none
+               transition-colors duration-150 w-full appearance-none cursor-pointer;
+        text-align: left;
+        text-align-last: left;
+        -moz-text-align-last: left;
+        background-image: none;
+    }
+    .select-wrap::after {
+        content: "";
+        position: absolute;
+        right: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 0;
+        height: 0;
+        border-left: 4px solid transparent;
+        border-right: 4px solid transparent;
+        border-top: 5px solid #888;
+        pointer-events: none;
+        flex-shrink: 0;
+    }
+    .select-wrap select:focus {
+        border-color: #e63946;
+    }
+
+    /* ── Cards ───────────────────────────────────────────────────── */
+    .card {
+        @apply bg-[#2D2D2E] rounded-2xl border border-[#3A3A3B];
+    }
+    .card-inner {
+        @apply bg-[#222223] rounded-xl border border-[#3A3A3B]/60;
+    }
+
+    /* ── Badges ──────────────────────────────────────────────────── */
+    .badge-success {
+        @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#80B918]/20 text-[#80B918];
+    }
+    .badge-error {
+        @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#EF233C]/20 text-[#EF233C];
+    }
+    .badge-warning {
+        @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#FFB703]/20 text-[#FFB703];
+    }
+    .badge-department {
+        @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-white/6 border border-[#3A3A3B] text-[#BDBDBD];
+    }
+    .badge-neutral {
+        @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-white/10 text-[#F8EDEB];
+    }
+    .badge-notpass {
+        @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-[#FF6B00]/20 text-[#FF6B00];
+    }
+
+    /* ── Page Header ─────────────────────────────────────────────── */
+    .page-header {
+        @apply flex items-center gap-3 px-6 py-4 border-b border-[#3A3A3B] bg-[#1A1A1B]/60;
+    }
+
+    /* Icon used in page-header: bare icon, gray tinted, no background box */
+    .page-header-icon {
+        @apply text-[#888] flex-shrink-0;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────────────── */
+    .section-label {
+        @apply text-[10px] font-bold uppercase tracking-widest text-[#555] px-4 py-2 mt-1;
+    }
+
+    /* ── Tables ──────────────────────────────────────────────────── */
+    .table-container {
+        @apply overflow-auto rounded-xl border border-[#3A3A3B];
+        box-shadow: rgba(14, 15, 12, 0.12) 0px 0px 0px 1px;
+    }
+    .data-table {
+        @apply w-full text-sm border-collapse;
+    }
+    .data-table thead tr {
+        @apply bg-[#1A1A1B] text-[#666] text-xs uppercase tracking-wider;
+    }
+    .data-table thead th {
+        @apply px-4 py-3 text-left font-semibold border-b border-[#3A3A3B] select-none;
+    }
+    .data-table tbody tr {
+        @apply border-b border-[#3A3A3B]/40 hover:bg-white/[0.04] transition-colors;
+    }
+    .data-table tbody td {
+        @apply px-4 py-2.5 text-[#E9ECEF];
+    }
+    .data-table tbody tr:nth-child(even) {
+        @apply bg-white/[0.015];
+    }
+
+    /* ── Toolbar / Filter bar ────────────────────────────────────── */
+    .toolbar {
+        @apply px-4 py-3 border-b border-[#3A3A3B] flex flex-wrap items-center gap-2 bg-[#1E1E1F];
+    }
+    .filter-bar {
+        @apply px-4 py-2 border-b border-[#3A3A3B] flex items-center gap-2 bg-[#1A1A1B]/50;
+    }
+    .toolbar-divider {
+        @apply h-5 w-px bg-[#3A3A3B] mx-1;
+    }
+}
+```
+
+Now let me fix the dropdown wrappers in AuditPage.vue and ReportPage.vue, and fix the header icons to be bare icons (like Settings page style) in red:
