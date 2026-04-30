@@ -140,7 +140,7 @@
                         </h3>
 
                         <!-- Type selector -->
-                        <div class="flex gap-4">
+                        <div class="flex gap-4 flex-wrap">
                             <label
                                 class="flex items-center gap-2 cursor-pointer select-none text-xs text-[#ccc]"
                             >
@@ -159,11 +159,23 @@
                                 <input
                                     type="checkbox"
                                     v-model="exportReport"
-                                    class="accent-[#FFB700] w-3.5 h-3.5"
+                                    class="accent-[#4CC9F0] w-3.5 h-3.5"
                                     @change="onExportTypeChange"
                                 />
                                 <BarChart2 :size="13" class="text-[#4CC9F0]" />
                                 Report Queries
+                            </label>
+                            <label
+                                class="flex items-center gap-2 cursor-pointer select-none text-xs text-[#ccc]"
+                            >
+                                <input
+                                    type="checkbox"
+                                    v-model="exportDepartments"
+                                    class="accent-[#70E000] w-3.5 h-3.5"
+                                    @change="onExportTypeChange"
+                                />
+                                <Database :size="13" class="text-[#70E000]" />
+                                Departments
                             </label>
                         </div>
 
@@ -296,7 +308,15 @@
                             "
                             class="text-xs text-[#888] italic py-1"
                         >
-                            ไม่พบข้อมูลที่จะส่งออก
+                            ไม่พบข้อมูล Query ที่จะส่งออก
+                        </div>
+
+                        <div
+                            v-if="exportDepartments"
+                            class="text-xs text-[#aaa] leading-relaxed"
+                        >
+                            Departments จะถูกส่งออกทั้งหมด
+                            {{ departments.length }} รายการ
                         </div>
 
                         <!-- Export result -->
@@ -315,7 +335,9 @@
                         <button
                             class="btn-primary text-sm"
                             :disabled="
-                                selectedExportIds.length === 0 || exporting
+                                (selectedExportIds.length === 0 &&
+                                    !exportDepartments) ||
+                                exporting
                             "
                             @click="doExport"
                         >
@@ -323,7 +345,7 @@
                             {{
                                 exporting
                                     ? "กำลังส่งออก..."
-                                    : `Export (${selectedExportIds.length} รายการ)`
+                                    : `Export (${selectedExportIds.length} Queries${exportDepartments ? ", Departments" : ""})`
                             }}
                         </button>
                     </div>
@@ -340,8 +362,8 @@
                         </h3>
 
                         <p class="text-xs text-[#888] leading-relaxed">
-                            นำเข้า Query จากไฟล์ JSON ที่ส่งออกจาก SmartQuery
-                            v3.0.0
+                            นำเข้า Query และ Departments จากไฟล์ JSON
+                            ที่ส่งออกจาก SmartQuery v3.0.0
                         </p>
 
                         <div class="flex gap-3 items-center">
@@ -416,7 +438,7 @@ import {
 } from "@tauri-apps/plugin-dialog";
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { api } from "../tauri-api";
-import type { DbConfig, SqlQuery } from "../types";
+import type { DbConfig, SqlQuery, Department } from "../types";
 
 const emit = defineEmits<{ saved: [cfg: DbConfig] }>();
 
@@ -435,9 +457,12 @@ const testOk = ref(false);
 // ---- Export ----
 const exportAudit = ref(false);
 const exportReport = ref(false);
+const exportDepartments = ref(false);
+
 const loadingExportList = ref(false);
 const auditQueries = ref<SqlQuery[]>([]);
 const reportQueries = ref<SqlQuery[]>([]);
+const departments = ref<Department[]>([]);
 const selectedExportIds = ref<number[]>([]);
 const exporting = ref(false);
 const exportResult = ref("");
@@ -518,26 +543,33 @@ async function onExportTypeChange() {
     exportResult.value = "";
     loadingExportList.value = true;
     try {
+        const previousAuditIds = auditQueries.value.map((q) => q.id);
+        const previousReportIds = reportQueries.value.map((q) => q.id);
+
         if (exportAudit.value) {
             auditQueries.value = await api.getAllQueries("audit");
         } else {
             auditQueries.value = [];
-            // Remove deselected audit ids
-            const auditIds = auditQueries.value.map((q) => q.id);
             selectedExportIds.value = selectedExportIds.value.filter(
-                (id) => !auditIds.includes(id),
+                (id) => !previousAuditIds.includes(id),
             );
         }
+
         if (exportReport.value) {
             reportQueries.value = await api.getAllQueries("report");
         } else {
             reportQueries.value = [];
-            const reportIds = reportQueries.value.map((q) => q.id);
             selectedExportIds.value = selectedExportIds.value.filter(
-                (id) => !reportIds.includes(id),
+                (id) => !previousReportIds.includes(id),
             );
         }
-        // Clean up selected ids that are no longer in the list
+
+        if (exportDepartments.value) {
+            departments.value = await api.getAllDepartments();
+        } else {
+            departments.value = [];
+        }
+
         const allIds = exportableQueries.value.map((q) => q.id);
         selectedExportIds.value = selectedExportIds.value.filter((id) =>
             allIds.includes(id),
@@ -579,7 +611,12 @@ function toggleSelectAllReport(e: Event) {
 }
 
 async function doExport() {
-    if (selectedExportIds.value.length === 0) return;
+    const shouldExportQueries = selectedExportIds.value.length > 0;
+    const shouldExportDepartments = exportDepartments.value;
+    if (!shouldExportQueries && !shouldExportDepartments) {
+        return;
+    }
+
     exporting.value = true;
     exportResult.value = "";
     try {
@@ -600,6 +637,14 @@ async function doExport() {
         const payload = {
             version: "3.0.0",
             exported_at: new Date().toISOString(),
+
+            departments: shouldExportDepartments
+                ? departments.value.map((d) => ({
+                      id: d.id,
+                      name: d.name,
+                      sort_order: d.sort_order,
+                  }))
+                : [],
             queries: queriesToExport,
         };
 
@@ -614,7 +659,17 @@ async function doExport() {
         }
 
         await writeTextFile(savePath, JSON.stringify(payload, null, 2));
-        exportResult.value = `ส่งออกสำเร็จ ${queriesToExport.length} รายการ → ${savePath}`;
+
+        const summary = [
+            shouldExportQueries ? `${queriesToExport.length} queries` : null,
+            shouldExportDepartments
+                ? `${payload.departments.length} departments`
+                : null,
+        ]
+            .filter(Boolean)
+            .join(", ");
+
+        exportResult.value = `ส่งออกสำเร็จ ${summary} → ${savePath}`;
         exportOk.value = true;
     } catch (e: any) {
         exportResult.value = `ส่งออกล้มเหลว: ${String(e)}`;
@@ -648,34 +703,82 @@ async function doImport() {
         const raw = await readTextFile(importFilePath.value.trim());
         const data = JSON.parse(raw);
 
-        if (!data.queries || !Array.isArray(data.queries)) {
-            throw new Error("รูปแบบไฟล์ไม่ถูกต้อง: ไม่พบ queries array");
+        const hasQueries = Array.isArray(data.queries);
+        const hasDepartments = Array.isArray(data.departments);
+        if (!hasQueries && !hasDepartments) {
+            throw new Error(
+                "รูปแบบไฟล์ไม่ถูกต้อง: ไม่พบ queries หรือ departments",
+            );
         }
 
-        let successCount = 0;
-        let failCount = 0;
+        const departmentNameToId = new Map<string, number>();
+        let importedDepartments = 0;
+        let importedQueries = 0;
+        let failedQueries = 0;
 
-        for (const q of data.queries) {
-            try {
-                await api.insertQuery(
-                    q.mode ?? "audit",
-                    q.name ?? "Untitled",
-                    q.description ?? "",
-                    q.sql_text ?? "",
-                    null,
-                    q.is_starred ?? 0,
-                );
-                successCount++;
-            } catch {
-                failCount++;
+        if (hasDepartments) {
+            const existingDepartments = await api.getAllDepartments();
+            for (const dept of existingDepartments) {
+                departmentNameToId.set(dept.name.trim(), dept.id);
+            }
+
+            for (const dept of data.departments) {
+                const deptName = String(dept?.name ?? "").trim();
+                if (!deptName || departmentNameToId.has(deptName)) continue;
+
+                try {
+                    const newDeptId = await api.insertDepartment(deptName);
+                    departmentNameToId.set(deptName, newDeptId);
+                    importedDepartments++;
+                } catch {
+                    /* ignore duplicate/invalid department */
+                }
             }
         }
 
-        importOk.value = failCount === 0;
-        importResult.value =
-            failCount === 0
-                ? `นำเข้าสำเร็จทั้งหมด ${successCount} รายการ`
-                : `นำเข้าสำเร็จ ${successCount} รายการ, ล้มเหลว ${failCount} รายการ`;
+        if (hasQueries) {
+            if (departmentNameToId.size === 0) {
+                const existingDepartments = await api.getAllDepartments();
+                for (const dept of existingDepartments) {
+                    departmentNameToId.set(dept.name.trim(), dept.id);
+                }
+            }
+
+            for (const q of data.queries) {
+                try {
+                    const departmentName = String(
+                        q.department_name ?? "",
+                    ).trim();
+                    const departmentId = departmentName
+                        ? (departmentNameToId.get(departmentName) ?? null)
+                        : null;
+
+                    await api.insertQuery(
+                        q.mode ?? "audit",
+                        q.name ?? "Untitled",
+                        q.description ?? "",
+                        q.sql_text ?? "",
+                        departmentId,
+                        Boolean(q.is_starred),
+                    );
+                    importedQueries++;
+                } catch {
+                    failedQueries++;
+                }
+            }
+        }
+
+        importOk.value = failedQueries === 0;
+        importResult.value = [
+            hasDepartments ? `Departments ${importedDepartments} รายการ` : null,
+            hasQueries
+                ? failedQueries === 0
+                    ? `Queries ${importedQueries} รายการ`
+                    : `Queries สำเร็จ ${importedQueries} รายการ, ล้มเหลว ${failedQueries} รายการ`
+                : null,
+        ]
+            .filter(Boolean)
+            .join(" | ");
     } catch (e: any) {
         importResult.value = `นำเข้าล้มเหลว: ${e instanceof Error ? e.message : String(e)}`;
         importOk.value = false;
